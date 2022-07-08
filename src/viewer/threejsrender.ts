@@ -8,7 +8,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 
 import { ModelExtras, MeshTileInfo, ClickableMesh } from '../3d/mapsquare';
-import { AnimationMixer, Clock, CubeCamera, Group, Material, Mesh, Object3D, PerspectiveCamera } from "three";
+import { AnimationMixer, Clock, CubeCamera, Group, Material, Mesh, Object3D, PerspectiveCamera, OrthographicCamera } from "three";
 import { VR360Render } from "./vr360camera";
 
 //TODO remove
@@ -58,7 +58,7 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 	private canvas: HTMLCanvasElement;
 	private skybox: { scene: THREE.Scene, camera: THREE.Camera } | null = null;
 	private scene: THREE.Scene;
-	private camera: THREE.PerspectiveCamera;
+	private camera: THREE.OrthographicCamera;
 	private controls: OrbitControls;
 	private modelnode: THREE.Group;
 	private floormesh: THREE.Mesh;
@@ -92,10 +92,13 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 
 		const fov = 45;
 		const aspect = 2;
-		const near = 0.1;
-		const far = 1000;
-		const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-		camera.position.set(0, 10, 20);
+		// probably will need to adjust width, height, near, far
+		const width = 1520; 
+		const height = 997;
+		const near = -200;
+		const far = 200;
+		const camera = new THREE.OrthographicCamera(width / -2, width / 2, height / 2, height / -2, near, far);
+		camera.position.set(0, 6, 0);
 		this.camera = camera;
 
 		const controls = new OrbitControls(camera, canvas);
@@ -208,7 +211,7 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 		this.scene.fog = (fogcolobj && !hideFog ? new THREE.Fog("#" + fogcolobj.getHexString(), 80, 250) : null);
 		if (sky?.skybox) {
 			let scene = this.skybox?.scene ?? new THREE.Scene();
-			let camera = this.skybox?.camera ?? new PerspectiveCamera().copy(this.camera, false);
+			let camera = this.skybox?.camera ?? new OrthographicCamera().copy(this.camera, false);
 			let obj = new THREE.Object3D();
 			obj.scale.set(1 / 512, 1 / 512, -1 / 512);
 			obj.add(sky.skybox);
@@ -301,8 +304,20 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 	renderScene(cam: THREE.Camera) {
 		let size = this.renderer.getRenderTarget() ?? this.renderer.getContext().canvas;
 		let aspect = size.width / size.height;
-		if (cam instanceof THREE.PerspectiveCamera && cam.aspect != aspect) {
-			this.camera.aspect = aspect;
+		let left = size.width / -2;
+		let right = size.width / 2;
+		let top = size.height / 2;
+		let bottom = size.height / -2;
+		if (cam instanceof THREE.OrthographicCamera && (
+			cam.left != left ||
+			cam.right != right ||
+			cam.top != top ||
+			cam.bottom != bottom
+		)) {
+			this.camera.left = left;
+			this.camera.right = right;
+			this.camera.top = top;
+			this.camera.bottom = bottom;
 			this.camera.updateProjectionMatrix();
 		}
 
