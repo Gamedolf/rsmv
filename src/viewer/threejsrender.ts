@@ -7,8 +7,8 @@ import { boundMethod } from 'autobind-decorator';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 
-import { ModelExtras, MeshTileInfo, ClickableMesh } from '../3d/mapsquare';
-import { AnimationMixer, Clock, CubeCamera, Group, Material, Mesh, Object3D, PerspectiveCamera, OrthographicCamera } from "three";
+import { ModelExtras, ClickableMesh } from '../3d/mapsquare';
+import { AnimationClip, Clock, Mesh, Object3D, PerspectiveCamera, OrthographicCamera } from "three";
 import { VR360Render } from "./vr360camera";
 
 //TODO remove
@@ -110,7 +110,6 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 		const scene = new THREE.Scene();
 		this.scene = scene;
 		globalThis.scene = this.scene;
-		//scene.background = new THREE.Color('transparent');
 		scene.add(camera);
 
 		renderer.physicallyCorrectLights = true;
@@ -148,6 +147,8 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 
 		let hemilight = new THREE.HemisphereLight(0xffffff, 0x888844);
 		scene.add(hemilight);
+
+		this.scene.fog = new THREE.Fog("#FFFFFF", 10000, 10000);
 
 		this.sceneElementsChanged();
 	}
@@ -207,8 +208,21 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 		this.controls.screenSpacePanning = controls == "free";
 
 		//fog/skybox
-		let fogcolobj = (sky?.fogColor ? new THREE.Color(sky.fogColor[0] / 255, sky.fogColor[1] / 255, sky.fogColor[2] / 255) : null);
-		this.scene.fog = (fogcolobj && !hideFog ? new THREE.Fog("#" + fogcolobj.getHexString(), 80, 250) : null);
+		let fogobj = (this.scene.fog as THREE.Fog);
+		if (sky?.fogColor) {
+			fogobj.color.setRGB(sky.fogColor[0] / 255, sky.fogColor[1] / 255, sky.fogColor[2] / 255);
+		} else {
+			fogobj.color.setRGB(1, 1, 1);
+		}
+		if (!hideFog) {
+			fogobj.far = 250;
+			fogobj.near = 80;
+		} else {
+			//can't actually remove fog from an already rendered scene, just make it not render instead
+			//still not clear if this is a bug in threejs or if it's intended, it used to work
+			fogobj.far = 100000;
+			fogobj.near = 100000;
+		}
 		if (sky?.skybox) {
 			let scene = this.skybox?.scene ?? new THREE.Scene();
 			let camera = this.skybox?.camera ?? new OrthographicCamera().copy(this.camera, false);
@@ -217,7 +231,7 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 			obj.add(sky.skybox);
 			scene.clear();
 			scene.add(obj, camera, new THREE.AmbientLight(0xffffff));
-			scene.background = fogcolobj;
+			scene.background = (sky.fogColor ? fogobj.color.clone() : null);
 			this.skybox = { scene, camera };
 		} else {
 			this.skybox = null;
@@ -432,7 +446,7 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 		const boxCenter = box.getCenter(new THREE.Vector3());
 
 		// update the Trackball controls to handle the new size
-		this.controls.maxDistance = Math.min(500, boxSize * 10 + 10);
+		// this.controls.maxDistance = Math.min(500, boxSize * 10 + 10);
 		this.controls.target.copy(boxCenter);
 		this.controls.update();
 		this.controls.screenSpacePanning = true;
@@ -523,9 +537,13 @@ export class ThreeJsRenderer extends TypedEmitter<ThreeJsRendererEvents>{
 export function exportThreeJsGltf(node: THREE.Object3D) {
 	return new Promise<Buffer>((resolve, reject) => {
 		let exporter = new GLTFExporter();
+		let anims: AnimationClip[] = [];
+		// node.traverseVisible(node => {
+		// 	if (node.animations) { anims.push(...node.animations); }
+		// });
 		exporter.parse(node, gltf => resolve(gltf as any), reject, {
 			binary: true,
-			animations: node.animations
+			animations: anims
 		});
 	});
 }
